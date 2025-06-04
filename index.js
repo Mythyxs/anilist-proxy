@@ -4,16 +4,21 @@ const fetch = require('node-fetch');
 
 const app = express();
 
-// Allow CORS and ensure JSON is parsed regardless of content-type
-app.use(cors());
+// Explicit CORS settings
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Or restrict to 'https://shemxz.com'
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 app.use(express.json({ type: '*/*' }));
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
-// Main proxy endpoint
 app.post('/anilist', async (req, res) => {
   try {
-    console.log('🔄 Incoming body:', req.body); // Log what your site sends
+    console.log('🔄 Incoming body:', req.body);
 
     const response = await fetch(ANILIST_URL, {
       method: 'POST',
@@ -25,13 +30,18 @@ app.post('/anilist', async (req, res) => {
     });
 
     const data = await response.json();
-    console.log('✅ AniList response:', data); // Log what AniList replies
+    console.log('✅ AniList response:', data);
 
     res.json(data);
   } catch (err) {
     console.error('❌ AniList fetch failed:', err);
     res.status(500).json({ error: 'AniList proxy failed' });
   }
+});
+
+// Handle preflight CORS requests
+app.options('/anilist', (req, res) => {
+  res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
