@@ -1,37 +1,90 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
 const app = express();
-
-// Explicit CORS settings
-app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // Or restrict to 'https://shemxz.com'
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  next();
-});
-
+app.use(cors());
 app.use(express.json({ type: '*/*' }));
 
 const ANILIST_URL = 'https://graphql.anilist.co';
+const BACKUP_PATH = './anime_backup.json';
 
-app.post('/anilist', async (req, res) => {
+let cachedSchedule = null;
+let lastFetched = 0;
+const CACHE_DURATION = 1000 * 60 * 60; // 1 hour
+
+const anilistQuery = `
+query ($search: String) {
+  Media(search: $search, type: ANIME) {
+    title { romaji english }
+    coverImage { medium large }
+    episodes
+    nextAiringEpisode { airingAt episode }
+  }
+}
+`;
+
+async function fetchAniListEntry(title) {
   try {
-    console.log('🔄 Incoming body:', JSON.stringify(req.body, null, 2));
-
-    const response = await fetch(ANILIST_URL, {
+    const res = await fetch(ANILIST_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(req.body),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: anilistQuery, variables: { search: title } })
+    });
+    const json = await res.json();
+    return json.data && json.data.Media ? json.data.Media : null;
+  } catch (err) {
+    console.error(`❌ Error fetching ${title}:`, err);
+    return null;
+  }
+}
+
+async function generateCachedSchedule() {
+  console.log('♻️ Refreshing schedule cache...');
+  const raw = JSON.parse(fs.readFileSync(BACKUP_PATH, 'utf-8'));
+  const entries = raw.filter(a =>
+    ['Planned to Watch', 'Unfinished / Disinterested'].includes(a.category)
+  );
+
+  const result = [];
+  for (const anime of entries) {
+    const data = await fetchAniListEntry(anime.title);
+    if (!data || !data.nextAiringEpisode) continue;
+
+    const ep = data.nextAiringEpisode;
+    result.push({
+      title: data.title.english || data.title.romaji || anime.title,
+      cover: data.coverImage.medium || data.coverImage.large || anime.coverImageUrl,
+      episode: ep.episode,
+      airingAt: ep.airingAt,
+      episodesTotal: data.episodes || null
     });
 
-    const data = await response.json();
-    console.log('✅ AniList response:', data);
+    await new Promise(r => setTimeout(r, 150)); // polite delay
+  }
 
+  cachedSchedule = result;
+  lastFetched = Date.now();
+}
+
+// JSONBin-like fallback API
+app.get('/cached-schedule', async (req, res) => {
+  if (!cachedSchedule || (Date.now() - lastFetched) > CACHE_DURATION) {
+    await generateCachedSchedule();
+  }
+  res.json({ schedule: cachedSchedule });
+});
+
+// Existing proxy
+app.post('/anilist', async (req, res) => {
+  try {
+    const response = await fetch(ANILIST_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const data = await response.json();
     res.json(data);
   } catch (err) {
     console.error('❌ AniList fetch failed:', err);
@@ -39,10 +92,7 @@ app.post('/anilist', async (req, res) => {
   }
 });
 
-// Handle preflight CORS requests
-app.options('/anilist', (req, res) => {
-  res.sendStatus(200);
-});
+app.options('/anilist', (req, res) => res.sendStatus(200));
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`AniList proxy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🌐 Server running on port ${PORT}`));
