@@ -81,15 +81,38 @@ app.get('/cached-schedule', async (req, res) => {
 
         const json = await response.json();
         const media = json?.data?.Media;
-        if (!media || !media.nextAiringEpisode) return null;
+
+        // Smarter handling for just-aired episodes
+        if (!media) return null;
+
+        let nextEp = media.nextAiringEpisode;
+        const nowSec = Date.now() / 1000;
+
+        let episodeNumber = nextEp?.episode;
+        let airingAt = nextEp?.airingAt;
+
+        if (episodeNumber && airingAt) {
+          const timeSinceAir = nowSec - airingAt;
+          if (timeSinceAir < 86400) {
+            // keep showing this episode
+          } else {
+            // fallback: simulate that last episode aired
+            airingAt -= 7 * 24 * 60 * 60; // estimate previous episode time
+            episodeNumber -= 1;
+          }
+        } else {
+          // fallback if AniList gives no airing info at all
+          airingAt = 0;
+          episodeNumber = 1;
+        }
 
         return {
           title: media.title.english || media.title.romaji || anime.title,
           coverImage: media.coverImage?.medium || media.coverImage?.large || '',
           totalEpisodes: media.episodes || 0,
           nextEpisode: {
-            episode: media.nextAiringEpisode.episode,
-            airingAt: media.nextAiringEpisode.airingAt
+            episode: episodeNumber,
+            airingAt: airingAt
           }
         };
       }));
