@@ -81,49 +81,17 @@ app.get('/cached-schedule', async (req, res) => {
 
         const json = await response.json();
         const media = json?.data?.Media;
-
-        // --- Begin "smart 24 h" logic replacement ---
-        if (!media) return null;
-
-        const nextEp = media.nextAiringEpisode;
-        const nowSeconds = Math.floor(Date.now() / 1000);
-
-        let chosenEpisode, chosenAiringAt;
-
-        // 1) If AniList has nextAiringEpisode:
-        if (nextEp && nextEp.episode && nextEp.airingAt) {
-          // compute an estimate for the previous episode’s airtime by subtracting 1 week (604800 s).
-          // (AniList’s nextAiringEpisode always points to the upcoming one.)
-          const prevEpisodeNumber = nextEp.episode - 1;
-          const prevAiringAtEstimate = nextEp.airingAt - 7 * 24 * 60 * 60;
-
-          // 1a) If that “prevAiringAtEstimate” is still within 24 h of now, show it as “Aired X hours ago”:
-          if (prevEpisodeNumber > 0 && prevAiringAtEstimate > nowSeconds - 86400) {
-            chosenEpisode = prevEpisodeNumber;
-            chosenAiringAt = prevAiringAtEstimate;
-          } else {
-            // 1b) Otherwise, we’re still waiting on the next episode:
-            chosenEpisode = nextEp.episode;
-            chosenAiringAt = nextEp.airingAt;
-          }
-
-        // 2) If AniList did NOT give us any “nextAiringEpisode” (e.g. anime finished or unknown),
-        } else {
-          // Fallback: just show “episode 1” with a timestamp of 0, so it appears as “Aired”
-          chosenEpisode = 1;
-          chosenAiringAt = 0;
-        }
+        if (!media || !media.nextAiringEpisode) return null;
 
         return {
           title: media.title.english || media.title.romaji || anime.title,
           coverImage: media.coverImage?.medium || media.coverImage?.large || '',
           totalEpisodes: media.episodes || 0,
           nextEpisode: {
-            episode: chosenEpisode,
-            airingAt: chosenAiringAt
+            episode: media.nextAiringEpisode.episode,
+            airingAt: media.nextAiringEpisode.airingAt
           }
         };
-        // --- End "smart 24 h" logic replacement ---
       }));
 
       result.push(...batchResults.filter(Boolean));
