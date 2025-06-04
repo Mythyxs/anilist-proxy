@@ -82,37 +82,48 @@ app.get('/cached-schedule', async (req, res) => {
         const json = await response.json();
         const media = json?.data?.Media;
 
-        // Smarter handling for just-aired episodes
-        if (!media) return null;
+        // New batch handler logic per instructions
+        if (!media || (!media.nextAiringEpisode && !media.episodes)) return null;
 
-        let nextEp = media.nextAiringEpisode;
-        const nowSec = Date.now() / 1000;
+        const nowSec = Math.floor(Date.now() / 1000);
+        const airing = media.nextAiringEpisode;
 
-        let episodeNumber = nextEp?.episode;
-        let airingAt = nextEp?.airingAt;
+        if (!airing) return null; // no episode info, skip
 
-        if (episodeNumber && airingAt) {
-          const timeSinceAir = nowSec - airingAt;
-          if (timeSinceAir < 86400) {
-            // keep showing this episode
-          } else {
-            // fallback: simulate that last episode aired
-            airingAt -= 7 * 24 * 60 * 60; // estimate previous episode time
-            episodeNumber -= 1;
+        const episodeNum = airing.episode;
+        const airingTime = airing.airingAt;
+
+        const timeUntilNext = airingTime - nowSec;
+
+        // If next episode is > 24h away, and it's a weekly show, check if last episode was recent
+        if (timeUntilNext > 24 * 60 * 60) {
+          const approxLastAirTime = airingTime - 7 * 24 * 60 * 60;
+          const timeSinceLast = nowSec - approxLastAirTime;
+
+          if (timeSinceLast > 24 * 60 * 60) {
+            return null; // last ep aired too long ago, skip
           }
-        } else {
-          // fallback if AniList gives no airing info at all
-          airingAt = 0;
-          episodeNumber = 1;
+
+          // Show last week's episode as still "active"
+          return {
+            title: media.title.english || media.title.romaji || anime.title,
+            coverImage: media.coverImage?.medium || media.coverImage?.large || '',
+            totalEpisodes: media.episodes || 0,
+            nextEpisode: {
+              episode: episodeNum - 1,
+              airingAt: approxLastAirTime
+            }
+          };
         }
 
+        // Otherwise show the actual upcoming episode
         return {
           title: media.title.english || media.title.romaji || anime.title,
           coverImage: media.coverImage?.medium || media.coverImage?.large || '',
           totalEpisodes: media.episodes || 0,
           nextEpisode: {
-            episode: episodeNumber,
-            airingAt: airingAt
+            episode: episodeNum,
+            airingAt: airingTime
           }
         };
       }));
