@@ -81,63 +81,17 @@ app.get('/cached-schedule', async (req, res) => {
 
         const json = await response.json();
         const media = json?.data?.Media;
-
-        // --- Updated logic for nextEpisode selection ---
-        if (!media) {
-          return null;
-        }
-
-        // AniList’s “nextAiringEpisode” refers to the upcoming episode (N). We want to decide:
-        // – If episode N-1 aired < 24 hours ago, return (N-1, its airtime) so the client shows “Aired X hours ago.”  
-        // – Otherwise, return the true “next” (N, its future airtime).
-
-        const nowSecs = Math.floor(Date.now() / 1000);
-        const nextEp = media.nextAiringEpisode;
-
-        // Fallback values, in case AniList has no nextAiringEpisode
-        let chosenEpisode = 1;
-        let chosenAiringAt = 0;
-
-        // 1) If AniList gave us a “nextAiringEpisode”:
-        if (nextEp && nextEp.episode && nextEp.airingAt) {
-          const upcomingNumber = nextEp.episode;
-          const upcomingAiringAt = nextEp.airingAt;
-
-          // Estimate when episode (N-1) would have aired:
-          // AniList doesn’t expose “last aired” info directly, but episodes are weekly,
-          // so we assume: prevEpisodeTime ≈ nextEpisodeTime – 7 days (604 800 s).
-          const prevEpisodeNumber = upcomingNumber - 1;
-          const prevEpisodeAiringAt = upcomingAiringAt - 7 * 24 * 3600;
-
-          // If prevEpisodeNumber > 0 and it aired within last 24 hrs, show that instead:
-          const secondsSincePrevAired = nowSecs - prevEpisodeAiringAt;
-          if (prevEpisodeNumber > 0 && secondsSincePrevAired < 24 * 3600) {
-            chosenEpisode = prevEpisodeNumber;
-            chosenAiringAt = prevEpisodeAiringAt;
-          } else {
-            // Otherwise show the actual upcoming episode normally:
-            chosenEpisode = upcomingNumber;
-            chosenAiringAt = upcomingAiringAt;
-          }
-
-        // 2) If AniList gave us no “nextAiringEpisode” (e.g. show ended, etc.)
-        } else {
-          // We’ll show “EP 1” with airingAt=0, so it will appear as “Aired” immediately.
-          // You can tweak this fallback if you’d rather omit finished/unknown shows entirely.
-          chosenEpisode = 1;
-          chosenAiringAt = 0;
-        }
+        if (!media || !media.nextAiringEpisode) return null;
 
         return {
           title: media.title.english || media.title.romaji || anime.title,
           coverImage: media.coverImage?.medium || media.coverImage?.large || '',
           totalEpisodes: media.episodes || 0,
           nextEpisode: {
-            episode: chosenEpisode,
-            airingAt: chosenAiringAt
+            episode: media.nextAiringEpisode.episode,
+            airingAt: media.nextAiringEpisode.airingAt
           }
         };
-        // --- End updated logic ---
       }));
 
       result.push(...batchResults.filter(Boolean));
