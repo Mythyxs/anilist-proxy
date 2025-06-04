@@ -4,7 +4,7 @@ const fetch = require('node-fetch');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ type: '*/*' }));
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
