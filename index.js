@@ -3,38 +3,45 @@ const cors = require('cors');
 const fetch = require('node-fetch');
 
 const app = express();
-app.use(cors());
 
-// Allow any content type (important fix)
-app.use(express.text({ type: '*/*' }));
+// Explicit CORS settings
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // Or restrict to 'https://shemxz.com'
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+
 app.use(express.json({ type: '*/*' }));
 
 const ANILIST_URL = 'https://graphql.anilist.co';
 
 app.post('/anilist', async (req, res) => {
-  let body = req.body;
-
-  // If request was sent as raw text, manually parse JSON
-  if (typeof body === 'string') {
-    try {
-      body = JSON.parse(body);
-    } catch (err) {
-      return res.status(400).json({ error: 'Invalid JSON body' });
-    }
-  }
-
   try {
+    console.log('🔄 Incoming body:', JSON.stringify(req.body, null, 2));
+
     const response = await fetch(ANILIST_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(body),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(req.body),
     });
+
     const data = await response.json();
+    console.log('✅ AniList response:', data);
+
     res.json(data);
   } catch (err) {
-    console.error('AniList fetch failed:', err);
+    console.error('❌ AniList fetch failed:', err);
     res.status(500).json({ error: 'AniList proxy failed' });
   }
+});
+
+// Handle preflight CORS requests
+app.options('/anilist', (req, res) => {
+  res.sendStatus(200);
 });
 
 const PORT = process.env.PORT || 3000;
