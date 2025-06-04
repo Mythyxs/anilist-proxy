@@ -82,50 +82,48 @@ app.get('/cached-schedule', async (req, res) => {
         const json = await response.json();
         const media = json?.data?.Media;
 
-        // New batch handler logic per instructions
-        if (!media || (!media.nextAiringEpisode && !media.episodes)) return null;
+        // --- Begin "smart 24 h" logic replacement ---
+        if (!media) return null;
 
-        const nowSec = Math.floor(Date.now() / 1000);
-        const airing = media.nextAiringEpisode;
+        const nextEp = media.nextAiringEpisode;
+        const nowSeconds = Math.floor(Date.now() / 1000);
 
-        if (!airing) return null; // no episode info, skip
+        let chosenEpisode, chosenAiringAt;
 
-        const episodeNum = airing.episode;
-        const airingTime = airing.airingAt;
+        // 1) If AniList has nextAiringEpisode:
+        if (nextEp && nextEp.episode && nextEp.airingAt) {
+          // compute an estimate for the previous episode’s airtime by subtracting 1 week (604800 s).
+          // (AniList’s nextAiringEpisode always points to the upcoming one.)
+          const prevEpisodeNumber = nextEp.episode - 1;
+          const prevAiringAtEstimate = nextEp.airingAt - 7 * 24 * 60 * 60;
 
-        const timeUntilNext = airingTime - nowSec;
-
-        // If next episode is > 24h away, and it's a weekly show, check if last episode was recent
-        if (timeUntilNext > 24 * 60 * 60) {
-          const approxLastAirTime = airingTime - 7 * 24 * 60 * 60;
-          const timeSinceLast = nowSec - approxLastAirTime;
-
-          if (timeSinceLast > 24 * 60 * 60) {
-            return null; // last ep aired too long ago, skip
+          // 1a) If that “prevAiringAtEstimate” is still within 24 h of now, show it as “Aired X hours ago”:
+          if (prevEpisodeNumber > 0 && prevAiringAtEstimate > nowSeconds - 86400) {
+            chosenEpisode = prevEpisodeNumber;
+            chosenAiringAt = prevAiringAtEstimate;
+          } else {
+            // 1b) Otherwise, we’re still waiting on the next episode:
+            chosenEpisode = nextEp.episode;
+            chosenAiringAt = nextEp.airingAt;
           }
 
-          // Show last week's episode as still "active"
-          return {
-            title: media.title.english || media.title.romaji || anime.title,
-            coverImage: media.coverImage?.medium || media.coverImage?.large || '',
-            totalEpisodes: media.episodes || 0,
-            nextEpisode: {
-              episode: episodeNum - 1,
-              airingAt: approxLastAirTime
-            }
-          };
+        // 2) If AniList did NOT give us any “nextAiringEpisode” (e.g. anime finished or unknown),
+        } else {
+          // Fallback: just show “episode 1” with a timestamp of 0, so it appears as “Aired”
+          chosenEpisode = 1;
+          chosenAiringAt = 0;
         }
 
-        // Otherwise show the actual upcoming episode
         return {
           title: media.title.english || media.title.romaji || anime.title,
           coverImage: media.coverImage?.medium || media.coverImage?.large || '',
           totalEpisodes: media.episodes || 0,
           nextEpisode: {
-            episode: episodeNum,
-            airingAt: airingTime
+            episode: chosenEpisode,
+            airingAt: chosenAiringAt
           }
         };
+        // --- End "smart 24 h" logic replacement ---
       }));
 
       result.push(...batchResults.filter(Boolean));
