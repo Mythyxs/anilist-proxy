@@ -18,7 +18,7 @@ const ANILIST_URL = 'https://graphql.anilist.co';
 
 app.post('/anilist', async (req, res) => {
   try {
-    console.log('🔄 Incoming body:', req.body);
+    console.log('🔄 Incoming body:', JSON.stringify(req.body, null, 2));
 
     const response = await fetch(ANILIST_URL, {
       method: 'POST',
