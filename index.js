@@ -78,8 +78,19 @@ app.get('/cached-schedule', async (req, res) => {
           })
         });
 
-        const json = await response.json();
-        const media = json?.data?.Media;
+if (response.status === 429) {
+  console.warn(`🚫 Rate limit hit while fetching ${anime.title}`);
+  continue;
+}
+
+if (!response.ok) {
+  console.error(`❌ Error ${response.status} for ${anime.title}`);
+  continue;
+}
+
+const json = await response.json();
+const media = json?.data?.Media;
+
         if (!media) {
           console.log(`No media data for ${anime.title}`);
           continue;
