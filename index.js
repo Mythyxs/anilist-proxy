@@ -40,6 +40,7 @@ app.post('/anilist', async (req, res) => {
 // ========== /cached-schedule GET route ==========
 app.get('/cached-schedule', async (req, res) => {
   const now = Date.now();
+  // Serve cached data if fetched within the last hour
   if (scheduleCache && now - lastFetchedTime < 1000 * 60 * 60) { // 1 hour cache
     console.log('✅ Returning cached schedule');
     return res.json(scheduleCache);
@@ -50,6 +51,7 @@ app.get('/cached-schedule', async (req, res) => {
     const jsonRes = await fetch(BACKUP_JSON_URL);
     const animeList = await jsonRes.json();
 
+    // Only consider "Planned to Watch" or "Unfinished / Disinterested"
     const relevantTitles = animeList.filter(a =>
       a.category === 'Planned to Watch' || a.category === 'Unfinished / Disinterested'
     );
@@ -81,20 +83,54 @@ app.get('/cached-schedule', async (req, res) => {
 
         const json = await response.json();
         const media = json?.data?.Media;
-        if (!media || !media.nextAiringEpisode) return null;
+        if (!media) return null;
 
-        return {
-          title: media.title.english || media.title.romaji || anime.title,
-          coverImage: media.coverImage?.medium || media.coverImage?.large || '',
-          totalEpisodes: media.episodes || 0,
-          nextEpisode: {
-            episode: media.nextAiringEpisode.episode,
-            airingAt: media.nextAiringEpisode.airingAt
+        const nowSecs = Math.floor(Date.now() / 1000);
+        const nextEp = media.nextAiringEpisode;
+
+        // 1) If AniList gave a nextAiringEpisode, decide whether to show previous (if <24h ago) or upcoming
+        if (nextEp && nextEp.episode && nextEp.airingAt) {
+          const upcomingNumber = nextEp.episode;
+          const upcomingAiringAt = nextEp.airingAt;
+
+          // Estimate when the previous episode (N-1) aired (assuming weekly release)
+          const prevEpisodeNumber = upcomingNumber - 1;
+          const prevEpisodeAiringAt = upcomingAiringAt - 7 * 24 * 3600;
+
+          // If the previous episode exists and aired within the last 24 hours, show it instead
+          if (prevEpisodeNumber > 0 && (nowSecs - prevEpisodeAiringAt) < 24 * 3600) {
+            return {
+              title: media.title.english || media.title.romaji || anime.title,
+              coverImage: media.coverImage?.medium || media.coverImage?.large || '',
+              totalEpisodes: media.episodes || 0,
+              nextEpisode: {
+                episode: prevEpisodeNumber,
+                airingAt: prevEpisodeAiringAt
+              }
+            };
           }
-        };
+
+          // Otherwise, return the true upcoming episode
+          return {
+            title: media.title.english || media.title.romaji || anime.title,
+            coverImage: media.coverImage?.medium || media.coverImage?.large || '',
+            totalEpisodes: media.episodes || 0,
+            nextEpisode: {
+              episode: upcomingNumber,
+              airingAt: upcomingAiringAt
+            }
+          };
+
+        // 2) If AniList returned no nextAiringEpisode at all, skip this anime
+        } else {
+          return null;
+        }
       }));
 
+      // Filter out any `null` results and append
       result.push(...batchResults.filter(Boolean));
+
+      // If there are more batches, wait a bit to avoid rate-limits
       if (i + BATCH_SIZE < relevantTitles.length) {
         await new Promise(r => setTimeout(r, BATCH_DELAY_MS));
       }
