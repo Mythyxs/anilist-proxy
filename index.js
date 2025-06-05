@@ -6,7 +6,7 @@ const app = express();
 
 // CORS
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*'); // You can restrict to your domain
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   next();
@@ -40,8 +40,7 @@ app.post('/anilist', async (req, res) => {
 // ========== /cached-schedule GET route ==========
 app.get('/cached-schedule', async (req, res) => {
   const now = Date.now();
-  // Serve cached data if fetched within the last hour
-  if (scheduleCache && now - lastFetchedTime < 1000 * 60 * 60) { // 1 hour cache
+  if (scheduleCache && now - lastFetchedTime < 1000 * 60 * 60) {
     console.log('✅ Returning cached schedule');
     return res.json(scheduleCache);
   }
@@ -51,15 +50,17 @@ app.get('/cached-schedule', async (req, res) => {
     const jsonRes = await fetch(BACKUP_JSON_URL);
     const animeList = await jsonRes.json();
 
-    // Only consider "Planned to Watch" or "Unfinished / Disinterested"
     const relevantTitles = animeList.filter(a =>
       a.category === 'Planned to Watch' || a.category === 'Unfinished / Disinterested'
     );
 
     const result = [];
-    const DELAY_MS = 500; // 100ms delay between API calls
+    const DELAY_MS = 500;
 
     for (const anime of relevantTitles) {
+      const timestampStart = new Date().toISOString();
+      console.log(`⏱️ START ${anime.title} at ${timestampStart}`);
+
       try {
         const response = await fetch(ANILIST_URL, {
           method: 'POST',
@@ -78,61 +79,60 @@ app.get('/cached-schedule', async (req, res) => {
           })
         });
 
-if (response.status === 429) {
-  console.warn(`🚫 Rate limit hit while fetching ${anime.title}`);
-  continue;
-}
-
-if (!response.ok) {
-  console.error(`❌ Error ${response.status} for ${anime.title}`);
-  continue;
-}
-
-const json = await response.json();
-const media = json?.data?.Media;
-
-        if (!media) {
-          console.log(`No media data for ${anime.title}`);
-          continue;
-        }
-
-        const nowSecs = Math.floor(Date.now() / 1000);
-        const nextEp = media.nextAiringEpisode;
-
-        if (nextEp && nextEp.episode && nextEp.airingAt) {
-          const upcomingNumber = nextEp.episode;
-          const upcomingAiringAt = nextEp.airingAt;
-
-          const prevEpisodeNumber = upcomingNumber - 1;
-          const prevEpisodeAiringAt = upcomingAiringAt - 7 * 24 * 3600;
-
-          if (prevEpisodeNumber > 0 && (nowSecs - prevEpisodeAiringAt) < 24 * 3600) {
-            result.push({
-              title: media.title.english || media.title.romaji || anime.title,
-              coverImage: media.coverImage?.medium || media.coverImage?.large || '',
-              totalEpisodes: media.episodes || 0,
-              nextEpisode: {
-                episode: prevEpisodeNumber,
-                airingAt: prevEpisodeAiringAt
-              }
-            });
-          } else {
-            result.push({
-              title: media.title.english || media.title.romaji || anime.title,
-              coverImage: media.coverImage?.medium || media.coverImage?.large || '',
-              totalEpisodes: media.episodes || 0,
-              nextEpisode: {
-                episode: upcomingNumber,
-                airingAt: upcomingAiringAt
-              }
-            });
-          }
+        if (response.status === 429) {
+          console.warn(`🚫 Rate limit hit while fetching ${anime.title}`);
+        } else if (!response.ok) {
+          console.error(`❌ Error ${response.status} for ${anime.title}`);
         } else {
-          console.log(`No upcoming episode for ${anime.title}`);
+          const json = await response.json();
+          const media = json?.data?.Media;
+
+          if (!media) {
+            console.log(`⚠️ No media found for ${anime.title}`);
+          } else {
+            console.log(`📺 Found media for ${anime.title}`);
+
+            const nowSecs = Math.floor(Date.now() / 1000);
+            const nextEp = media.nextAiringEpisode;
+
+            if (nextEp && nextEp.episode && nextEp.airingAt) {
+              const upcomingNumber = nextEp.episode;
+              const upcomingAiringAt = nextEp.airingAt;
+
+              const prevEpisodeNumber = upcomingNumber - 1;
+              const prevEpisodeAiringAt = upcomingAiringAt - 7 * 24 * 3600;
+
+              if (prevEpisodeNumber > 0 && (nowSecs - prevEpisodeAiringAt) < 24 * 3600) {
+                result.push({
+                  title: media.title.english || media.title.romaji || anime.title,
+                  coverImage: media.coverImage?.medium || media.coverImage?.large || '',
+                  totalEpisodes: media.episodes || 0,
+                  nextEpisode: {
+                    episode: prevEpisodeNumber,
+                    airingAt: prevEpisodeAiringAt
+                  }
+                });
+              } else {
+                result.push({
+                  title: media.title.english || media.title.romaji || anime.title,
+                  coverImage: media.coverImage?.medium || media.coverImage?.large || '',
+                  totalEpisodes: media.episodes || 0,
+                  nextEpisode: {
+                    episode: upcomingNumber,
+                    airingAt: upcomingAiringAt
+                  }
+                });
+              }
+            } else {
+              console.log(`❌ No upcoming episode for ${anime.title}`);
+            }
+          }
         }
       } catch (err) {
-        console.error(`Error fetching data for ${anime.title}:`, err);
+        console.error(`💥 Error fetching data for ${anime.title}:`, err);
       }
+
+      console.log(`⏳ Waiting ${DELAY_MS}ms before next fetch...`);
       await new Promise(r => setTimeout(r, DELAY_MS));
     }
 
@@ -140,7 +140,6 @@ const media = json?.data?.Media;
     lastFetchedTime = now;
     console.log('✅ Cached schedule updated');
     res.json(result);
-
   } catch (err) {
     console.error('❌ Failed to fetch schedule:', err);
     res.status(500).json({ error: 'Failed to build schedule' });
