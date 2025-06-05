@@ -14,39 +14,47 @@ const BACKUP_JSON_URL = 'https://raw.githubusercontent.com/Mythyxs/website/refs/
 let scheduleCache = null;
 let lastFetchedTime = null;
 
-// Send to Discord webhook
+// 🔁 Send IP + UA + Timestamp to Discord
 function sendToDiscordWebhook(data) {
   const webhookURL = 'https://discord.com/api/webhooks/1379575038193176616/EbLjYnW0r-vUoqip6IHdq0ihM06C4ySyeMuqs7JSO57C-6AjGMl13lZF5TpEbbTlUJJ5';
-  const postData = JSON.stringify({
-    content: null,
-    embeds: [{
-      title: '🛰️ New Visitor Logged',
-      color: 0x7289DA,
-      fields: [
-        { name: 'IP Address', value: data.ip || 'Unknown', inline: false },
-        { name: 'User-Agent', value: data.userAgent || 'Unknown', inline: false },
-        { name: 'Time', value: data.timestamp, inline: false }
-      ]
-    }]
+
+  const payload = JSON.stringify({
+    embeds: [
+      {
+        title: '🛰️ New Visitor Logged',
+        color: 0x7289DA,
+        fields: [
+          { name: 'IP Address', value: `\`${data.ip || 'Unknown'}\``, inline: false },
+          { name: 'User-Agent', value: `\`\`\`${data.userAgent || 'Unknown'}\`\`\``, inline: false },
+          { name: 'Time', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        ]
+      }
+    ]
   });
 
   const req = https.request(webhookURL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(postData)
+      'Content-Length': Buffer.byteLength(payload)
     }
+  }, res => {
+    let body = '';
+    res.on('data', chunk => body += chunk);
+    res.on('end', () => {
+      console.log(`✅ Discord webhook sent (status ${res.statusCode}): ${body}`);
+    });
   });
 
   req.on('error', err => {
-    console.error('❌ Discord Webhook Error:', err);
+    console.error('❌ Discord webhook error:', err);
   });
 
-  req.write(postData);
+  req.write(payload);
   req.end();
 }
 
-// IP logging middleware
+// 🌐 Visitor logging middleware
 app.use((req, res, next) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   const userAgent = req.headers['user-agent'];
@@ -58,7 +66,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// /anilist passthrough
+// 📡 /anilist passthrough
 app.post('/anilist', async (req, res) => {
   try {
     const response = await fetch(ANILIST_URL, {
@@ -74,7 +82,7 @@ app.post('/anilist', async (req, res) => {
   }
 });
 
-// /cached-schedule endpoint
+// 🗓️ /cached-schedule endpoint
 app.get('/cached-schedule', async (req, res) => {
   const now = Date.now();
 
@@ -171,10 +179,10 @@ app.get('/cached-schedule', async (req, res) => {
   }
 });
 
-// Preflight
+// CORS preflight
 app.options('/anilist', (_, res) => res.sendStatus(200));
 app.options('/cached-schedule', (_, res) => res.sendStatus(200));
 
-// Start server
-const PORT = process.env.PORT || 3000;
+// 🚀 Start server
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`✅ AniList proxy running on port ${PORT}`));
