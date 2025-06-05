@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
-const https = require('https');
 
 const app = express();
 
@@ -14,59 +13,7 @@ const BACKUP_JSON_URL = 'https://raw.githubusercontent.com/Mythyxs/website/refs/
 let scheduleCache = null;
 let lastFetchedTime = null;
 
-// 🔁 Send IP + UA + Timestamp to Discord
-function sendToDiscordWebhook(data) {
-  const webhookURL = 'https://discord.com/api/webhooks/1379575038193176616/EbLjYnW0r-vUoqip6IHdq0ihM06C4ySyeMuqs7JSO57C-6AjGMl13lZF5TpEbbTlUJJ5';
-
-  const payload = JSON.stringify({
-    embeds: [
-      {
-        title: '🛰️ New Visitor Logged',
-        color: 0x7289DA,
-        fields: [
-          { name: 'IP Address', value: `\`${data.ip || 'Unknown'}\``, inline: false },
-          { name: 'User-Agent', value: `\`\`\`${data.userAgent || 'Unknown'}\`\`\``, inline: false },
-          { name: 'Time', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
-        ]
-      }
-    ]
-  });
-
-  const req = https.request(webhookURL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(payload)
-    }
-  }, res => {
-    let body = '';
-    res.on('data', chunk => body += chunk);
-    res.on('end', () => {
-      console.log(`✅ Discord webhook sent (status ${res.statusCode}): ${body}`);
-    });
-  });
-
-  req.on('error', err => {
-    console.error('❌ Discord webhook error:', err);
-  });
-
-  req.write(payload);
-  req.end();
-}
-
-// 🌐 Visitor logging middleware
-app.use((req, res, next) => {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  const userAgent = req.headers['user-agent'];
-  const timestamp = new Date().toISOString();
-
-  console.log(`📡 IP: ${ip} | UA: ${userAgent} | Time: ${timestamp}`);
-  sendToDiscordWebhook({ ip, userAgent, timestamp });
-
-  next();
-});
-
-// 📡 /anilist passthrough
+// /anilist passthrough
 app.post('/anilist', async (req, res) => {
   try {
     const response = await fetch(ANILIST_URL, {
@@ -82,7 +29,7 @@ app.post('/anilist', async (req, res) => {
   }
 });
 
-// 🗓️ /cached-schedule endpoint
+// /cached-schedule endpoint
 app.get('/cached-schedule', async (req, res) => {
   const now = Date.now();
 
@@ -179,10 +126,10 @@ app.get('/cached-schedule', async (req, res) => {
   }
 });
 
-// CORS preflight
+// Preflight
 app.options('/anilist', (_, res) => res.sendStatus(200));
 app.options('/cached-schedule', (_, res) => res.sendStatus(200));
 
-// 🚀 Start server
-const PORT = process.env.PORT || 8080;
+// ✅ Start server
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ AniList proxy running on port ${PORT}`));
