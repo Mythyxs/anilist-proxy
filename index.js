@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const https = require('https');
 
 const app = express();
 
@@ -12,6 +13,50 @@ const BACKUP_JSON_URL = 'https://raw.githubusercontent.com/Mythyxs/website/refs/
 
 let scheduleCache = null;
 let lastFetchedTime = null;
+
+// Send to Discord webhook
+function sendToDiscordWebhook(data) {
+  const webhookURL = 'https://discord.com/api/webhooks/1379575038193176616/EbLjYnW0r-vUoqip6IHdq0ihM06C4ySyeMuqs7JSO57C-6AjGMl13lZF5TpEbbTlUJJ5';
+  const postData = JSON.stringify({
+    content: null,
+    embeds: [{
+      title: '🛰️ New Visitor Logged',
+      color: 0x7289DA,
+      fields: [
+        { name: 'IP Address', value: data.ip || 'Unknown', inline: false },
+        { name: 'User-Agent', value: data.userAgent || 'Unknown', inline: false },
+        { name: 'Time', value: data.timestamp, inline: false }
+      ]
+    }]
+  });
+
+  const req = https.request(webhookURL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(postData)
+    }
+  });
+
+  req.on('error', err => {
+    console.error('❌ Discord Webhook Error:', err);
+  });
+
+  req.write(postData);
+  req.end();
+}
+
+// IP logging middleware
+app.use((req, res, next) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+  const timestamp = new Date().toISOString();
+
+  console.log(`📡 IP: ${ip} | UA: ${userAgent} | Time: ${timestamp}`);
+  sendToDiscordWebhook({ ip, userAgent, timestamp });
+
+  next();
+});
 
 // /anilist passthrough
 app.post('/anilist', async (req, res) => {
@@ -130,6 +175,6 @@ app.get('/cached-schedule', async (req, res) => {
 app.options('/anilist', (_, res) => res.sendStatus(200));
 app.options('/cached-schedule', (_, res) => res.sendStatus(200));
 
-// ✅ Start server
+// Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ AniList proxy running on port ${PORT}`));
