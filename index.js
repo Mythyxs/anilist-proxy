@@ -57,7 +57,7 @@ app.get('/cached-schedule', async (req, res) => {
     );
 
     const result = [];
-    const DELAY_MS = 300; // 100ms delay between API calls
+    const DELAY_MS = 500; // 100ms delay between API calls
 
     for (const anime of relevantTitles) {
       try {
