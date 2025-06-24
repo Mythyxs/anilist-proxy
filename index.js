@@ -28,6 +28,18 @@ app.post('/anilist', async (req, res) => {
     res.status(500).json({ error: 'AniList proxy failed' });
   }
 });
+// quick health check
+app.get('/ping', (_, res) => res.send('pong'));
+
+// log when whitelist route is registered
+console.log('⌛ Registering /whitelist route…');
+app.get('/whitelist', (req, res) => {
+  console.log('📥  /whitelist requested');
+  res.setHeader('Content-Type', 'text/plain');
+  res.setHeader('Cache-Control', 'no-store');
+  res.send(WHITELIST.join('\n'));
+});
+console.log('✅  /whitelist route registered');
 
 // /cached-schedule endpoint
 app.get('/cached-schedule', async (req, res) => {
