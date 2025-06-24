@@ -126,6 +126,24 @@ app.get('/cached-schedule', async (req, res) => {
   }
 });
 
+// ------------------------------------------------ ROBLOX WHITELIST / PROXY STUFF ------------------------------------------------ 
+app.get('/whitelist', async (req, res) => {
+  try {
+    const rawUrl = 'https://raw.githubusercontent.com/Mythyxs/V2/refs/heads/main/HWIDs.txt';
+    const whitelistRes = await fetch(rawUrl, { headers: { 'Cache-Control': 'no-cache' } });
+    const text = await whitelistRes.text();
+
+    res.setHeader('Content-Type', 'text/plain');
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(text);
+  } catch (err) {
+    console.error('❌ Failed to fetch whitelist:', err);
+    res.status(500).send('failed to fetch whitelist');
+  }
+});
+
+// ------------------------------------------------ ROBLOX WHITELIST / PROXY STUFF ------------------------------------------------ 
+
 // Preflight
 app.options('/anilist', (_, res) => res.sendStatus(200));
 app.options('/cached-schedule', (_, res) => res.sendStatus(200));
@@ -133,3 +151,11 @@ app.options('/cached-schedule', (_, res) => res.sendStatus(200));
 // ✅ Start server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ AniList proxy running on port ${PORT}`));
+
+
+
+
+
+
+
+
