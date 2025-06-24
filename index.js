@@ -28,18 +28,6 @@ app.post('/anilist', async (req, res) => {
     res.status(500).json({ error: 'AniList proxy failed' });
   }
 });
-// quick health check
-app.get('/ping', (_, res) => res.send('pong'));
-
-// log when whitelist route is registered
-console.log('⌛ Registering /whitelist route…');
-app.get('/whitelist', (req, res) => {
-  console.log('📥  /whitelist requested');
-  res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Cache-Control', 'no-store');
-  res.send(WHITELIST.join('\n'));
-});
-console.log('✅  /whitelist route registered');
 
 // /cached-schedule endpoint
 app.get('/cached-schedule', async (req, res) => {
@@ -137,32 +125,6 @@ app.get('/cached-schedule', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch schedule' });
   }
 });
-
-// ------------------------------------------------ ROBLOX WHITELIST / PROXY STUFF ------------------------------------------------ 
-// In-memory HWID whitelist
-const WHITELIST = [
-  "CC8995C0-3E17-4CB9-AC30-3364A8C3719C",
-  "dd928f96-61e4-4247-99db-5dfc2e77a39b",
-  "FA5D0F51-F0AE-4311-8122-0DF905C6069B",
-  "B722AB45-9873-4094-B92E-E9C8549F4DC3",
-  "9BFC9376-77AB-431E-8FC6-B547AA4F4228",
-  "55e3782f-df86-4bc5-b5dc-389314d3c956",
-  "C172AAF2-3DB6-4B67-8658-1FB9334E825B",
-  "C6452844-C695-490E-A12E-C1BE4E609B68",
-  "16542119-F0BC-4C3D-9FEB-DC9FFB2468BC"
-];
-
-// Serve whitelist as plain text (newline-separated)
-app.get('/whitelist', (req, res) => {
-  console.log('📥 /whitelist requested');
-  res.setHeader('Content-Type', 'text/plain');
-  res.setHeader('Cache-Control', 'no-store');
-  res.send(WHITELIST.join('\n'));
-});
-
-
-
-// ------------------------------------------------ ROBLOX WHITELIST / PROXY STUFF ------------------------------------------------ 
 
 // Preflight
 app.options('/anilist', (_, res) => res.sendStatus(200));
