@@ -143,15 +143,11 @@ const WHITELIST = [
 // Serve whitelist as plain text (newline-separated)
 app.get('/whitelist', (req, res) => {
   console.log('📥 /whitelist requested');
-
-  // Optional: log requester info
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-  console.log(`👤 Request from IP: ${ip}`);
-
   res.setHeader('Content-Type', 'text/plain');
   res.setHeader('Cache-Control', 'no-store');
   res.send(WHITELIST.join('\n'));
 });
+
 
 
 // ------------------------------------------------ ROBLOX WHITELIST / PROXY STUFF ------------------------------------------------ 
